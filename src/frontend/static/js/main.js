@@ -12,22 +12,40 @@ document.addEventListener('DOMContentLoaded', async () => {
             
             const variants = program.variants ? 
                 program.variants.map(variant => `
-                    <button class="install-button" data-program="${program.name}" data-variant="${variant.type}">
-                        <i class="fas fa-download"></i>
-                        Install ${variant.name}
+                    <button class="install-button ${variant.installed ? 'success' : ''}" 
+                            data-program="${program.name}" 
+                            data-variant="${variant.type}"
+                            ${variant.installed ? 'disabled' : ''}>
+                        <i class="fas ${variant.installed ? 'fa-check' : 'fa-download'}"></i>
+                        <span class="button-text">
+                            ${variant.installed ? 'Installed' : `Install ${variant.name}`}
+                        </span>
+                        <div class="install-progress"></div>
                     </button>
                 `).join('') :
-                `<button class="install-button" data-program="${program.name}">
-                    <i class="fas fa-download"></i>
-                    Install ${program.name}
-                </button>`;
+                `<button class="install-button ${program.installed ? 'success' : ''}" 
+                         data-program="${program.name}"
+                         data-variant="${program.defaultVariant || 'apt'}"
+                         ${program.installed ? 'disabled' : ''}>
+                    <i class="fas ${program.installed ? 'fa-check' : 'fa-download'}"></i>
+                    <span class="button-text">
+                        ${program.installed ? 'Installed' : `Install ${program.name}`}
+                    </span>
+                    <div class="install-progress"></div>
+                 </button>`;
 
             card.innerHTML = `
-                <img src="${program.logo}" alt="${program.name} logo" class="program-logo">
+                <div class="program-header">
+                    <img src="${program.logo}" alt="${program.name} logo" class="program-logo">
+                    <div class="program-badges">
+                        <span class="program-category">${program.category}</span>
+                        ${program.isCustomized ? '<span class="custom-badge">Custom Patch</span>' : ''}
+                    </div>
+                </div>
                 <div class="program-info">
                     <h2>${program.name}</h2>
-                    <div class="program-category">${program.category}</div>
                     <p class="program-description">${program.description}</p>
+                    ${program.customDescription ? `<p class="custom-description">${program.customDescription}</p>` : ''}
                     <div class="program-variants">
                         ${variants}
                     </div>
@@ -39,28 +57,48 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Add install button listeners
         document.querySelectorAll('.install-button').forEach(button => {
             button.addEventListener('click', async (e) => {
-                const programName = e.target.dataset.program;
-                const variant = e.target.dataset.variant || 'apt';
-                button.disabled = true;
-                button.textContent = 'Installing...';
+                const btn = e.currentTarget;
+                const programName = btn.dataset.program;
+                const variant = btn.dataset.variant;
+                
+                btn.disabled = true;
+                btn.classList.add('installing');
+                btn.querySelector('.button-text').textContent = 'Installing...';
                 
                 try {
                     const result = await window.pywebview.api.install_program(programName, variant);
                     if (result.success) {
-                        button.textContent = 'Installed';
-                        button.classList.add('success');
+                        btn.classList.remove('installing');
+                        btn.classList.add('success');
+                        btn.querySelector('.button-text').textContent = 'Installed';
+                        btn.querySelector('i').className = 'fas fa-check';
                     } else {
-                        button.textContent = 'Error';
-                        button.classList.add('error');
-                        alert(result.message);
+                        btn.classList.remove('installing');
+                        btn.classList.add('error');
+                        btn.querySelector('.button-text').textContent = 'Error';
+                        btn.querySelector('i').className = 'fas fa-exclamation-triangle';
+                        showError(result.message);
                     }
                 } catch (error) {
-                    button.textContent = 'Error';
-                    button.classList.add('error');
-                    alert('Installation failed');
+                    btn.classList.remove('installing');
+                    btn.classList.add('error');
+                    btn.querySelector('.button-text').textContent = 'Error';
+                    btn.querySelector('i').className = 'fas fa-exclamation-triangle';
+                    showError('Installation failed');
                 }
             });
         });
+    }
+
+    function showError(message) {
+        const toast = document.createElement('div');
+        toast.className = 'error-toast';
+        toast.innerHTML = `
+            <i class="fas fa-exclamation-circle"></i>
+            <span>${message}</span>
+        `;
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 5000);
     }
 
     // Navigation event listeners
