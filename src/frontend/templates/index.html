@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LibreDesign Suite</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <header>
+        <h1>LibreDesign Suite</h1>
+        <nav>
+            <ul>
+                <li><a href="#" data-category="image_editing">Image Editing</a></li>
+                <li><a href="#" data-category="video_editing">Video Editing</a></li>
+                <li><a href="#" data-category="audio_editing">Audio Editing</a></li>
+            </ul>
+        </nav>
+    </header>
+
+    <main id="programs-container">
+        <!-- Programs will be loaded here dynamically -->
+    </main>
+
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>
