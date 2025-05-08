@@ -162,34 +162,44 @@ class Api:
             # Install GIMP via Flatpak
             subprocess.run(['flatpak', 'install', '-y', 'flathub', 'org.gimp.GIMP'], check=True)
             
-            # Download and apply PhotoGIMP patch
-            home = Path.home()
-            config_dir = home / '.var/app/org.gimp.GIMP/config'
-            
             # Create temp directory for download
             with tempfile.TemporaryDirectory() as tmp_dir:
-                # Download PhotoGIMP
-                url = "https://github.com/Diolinux/PhotoGIMP/archive/refs/heads/master.zip"
-                zip_path = Path(tmp_dir) / "photogimp.zip"
+                tmp_path = Path(tmp_dir)
                 
+                # Download PhotoGIMP
+                url = "https://github.com/Diolinux/PhotoGIMP/releases/download/3.0/PhotoGIMP-linux.zip"
+                zip_path = tmp_path / "photogimp.zip"
+                
+                print("Downloading PhotoGIMP...")
                 response = requests.get(url)
                 with open(zip_path, 'wb') as f:
                     f.write(response.content)
                 
-                # Extract and copy files
-                shutil.unpack_archive(zip_path, tmp_dir)
-                photogimp_dir = Path(tmp_dir) / "PhotoGIMP-master"
+                # Extract files
+                print("Extracting files...")
+                shutil.unpack_archive(zip_path, tmp_path)
                 
-                # Ensure config directory exists
-                config_dir.mkdir(parents=True, exist_ok=True)
+                # Get user's home directory
+                home = Path.home()
                 
-                # Copy PhotoGIMP files
-                if (photogimp_dir / '.config/GIMP').exists():
-                    shutil.copytree(photogimp_dir / '.config/GIMP', config_dir / 'GIMP', 
+                # Find the extracted PhotoGIMP directory
+                extracted_dir = next(tmp_path.glob('PhotoGIMP*'))
+                
+                print("Installing PhotoGIMP files...")
+                
+                # Copy .config directory
+                if (extracted_dir / '.config').exists():
+                    shutil.copytree(extracted_dir / '.config', home / '.config', 
                                   dirs_exist_ok=True)
                 
-            return {'success': True, 'message': 'PhotoGIMP installed successfully'}
-            
+                # Copy .local directory
+                if (extracted_dir / '.local').exists():
+                    shutil.copytree(extracted_dir / '.local', home / '.local', 
+                                  dirs_exist_ok=True)
+                
+                print("PhotoGIMP installation complete!")
+                return {'success': True, 'message': 'PhotoGIMP installed successfully'}
+                
         except Exception as e:
             return {'success': False, 'message': f'Error installing PhotoGIMP: {str(e)}'}
 
