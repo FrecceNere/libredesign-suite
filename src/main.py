@@ -9,6 +9,9 @@ import shutil
 import requests
 from pathlib import Path
 import tempfile
+import time
+from concurrent.futures import ThreadPoolExecutor
+import multiprocessing
 
 app = Flask(__name__,
     template_folder='frontend/templates',
@@ -25,22 +28,51 @@ class Api:
                 'Audacity': 'audacity'
             }
         }
+        self._cache = {
+            'flatpak': {},
+            'apt': {},
+            'custom_config': {}
+        }
+        self._cache_ttl = 300  # 5 minutes cache validity
+
+    def _cache_get(self, cache_type, key):
+        cache_entry = self._cache[cache_type].get(key)
+        if cache_entry:
+            timestamp, value = cache_entry
+            if time.time() - timestamp < self._cache_ttl:
+                return value
+        return None
+
+    def _cache_set(self, cache_type, key, value):
+        self._cache[cache_type][key] = (time.time(), value)
 
     def _check_flatpak_installed(self, app_id):
         """Check if a Flatpak application is installed"""
+        cached = self._cache_get('flatpak', app_id)
+        if cached is not None:
+            return cached
+
         try:
             result = subprocess.run(['flatpak', 'list', '--app', '--columns=application'],
                                  capture_output=True, text=True)
-            return app_id in result.stdout
+            is_installed = app_id in result.stdout
+            self._cache_set('flatpak', app_id, is_installed)
+            return is_installed
         except Exception:
             return False
 
     def _check_apt_installed(self, package_name):
         """Check if an apt package is installed"""
+        cached = self._cache_get('apt', package_name)
+        if cached is not None:
+            return cached
+
         try:
             result = subprocess.run(['dpkg', '-l', package_name],
                                  capture_output=True, text=True)
-            return f"ii  {package_name}" in result.stdout
+            is_installed = f"ii  {package_name}" in result.stdout
+            self._cache_set('apt', package_name, is_installed)
+            return is_installed
         except Exception:
             return False
 
@@ -55,6 +87,38 @@ class Api:
             preferences = config_path / 'preferences.xml'
             return preferences.exists() and preferences.is_file()
         return False
+
+    def _download_file(self, url, destination):
+        """Download file with progress and chunked transfer"""
+        try:
+            response = requests.get(url, stream=True)
+            response.raise_for_status()
+            
+            total_size = int(response.headers.get('content-length', 0))
+            block_size = 8192
+            
+            with open(destination, 'wb') as f:
+                for chunk in response.iter_content(block_size):
+                    if chunk:
+                        f.write(chunk)
+            
+            return True
+        except Exception as e:
+            print(f"Download error: {e}")
+            return False
+
+    def _parallel_copy(self, src_items, dst_base):
+        """Copy files and directories in parallel"""
+        def copy_item(item):
+            dst_path = dst_base / item.name
+            if item.is_dir():
+                shutil.copytree(item, dst_path, dirs_exist_ok=True)
+            else:
+                shutil.copy2(item, dst_path)
+
+        max_workers = min(multiprocessing.cpu_count() * 2, len(src_items))
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            list(executor.map(copy_item, src_items))
 
     def get_programs(self):
         """Return list of available open source programs with installation status"""
@@ -162,40 +226,32 @@ class Api:
             # Install GIMP via Flatpak
             subprocess.run(['flatpak', 'install', '-y', 'flathub', 'org.gimp.GIMP'], check=True)
             
-            # Create temp directory for download
             with tempfile.TemporaryDirectory() as tmp_dir:
                 tmp_path = Path(tmp_dir)
-                
-                # Download PhotoGIMP
-                url = "https://github.com/Diolinux/PhotoGIMP/releases/download/3.0/PhotoGIMP-linux.zip"
                 zip_path = tmp_path / "photogimp.zip"
                 
+                # Download PhotoGIMP using optimized downloader
                 print("Downloading PhotoGIMP...")
-                response = requests.get(url)
-                with open(zip_path, 'wb') as f:
-                    f.write(response.content)
+                url = "https://github.com/Diolinux/PhotoGIMP/releases/download/3.0/PhotoGIMP-linux.zip"
+                if not self._download_file(url, zip_path):
+                    raise Exception("Failed to download PhotoGIMP")
                 
-                # Extract files
                 print("Extracting files...")
                 shutil.unpack_archive(zip_path, tmp_path)
                 
-                # Get user's home directory
                 home = Path.home()
-                
-                # Find the extracted PhotoGIMP directory
                 extracted_dir = next(tmp_path.glob('PhotoGIMP*'))
                 
                 print("Installing PhotoGIMP files...")
                 
-                # Copy .config directory
-                if (extracted_dir / '.config').exists():
-                    shutil.copytree(extracted_dir / '.config', home / '.config', 
-                                  dirs_exist_ok=True)
+                # Use parallel copy for better performance
+                config_items = list((extracted_dir / '.config').glob('*'))
+                local_items = list((extracted_dir / '.local').glob('*'))
                 
-                # Copy .local directory
-                if (extracted_dir / '.local').exists():
-                    shutil.copytree(extracted_dir / '.local', home / '.local', 
-                                  dirs_exist_ok=True)
+                if config_items:
+                    self._parallel_copy(config_items, home / '.config')
+                if local_items:
+                    self._parallel_copy(local_items, home / '.local')
                 
                 print("PhotoGIMP installation complete!")
                 return {'success': True, 'message': 'PhotoGIMP installed successfully'}

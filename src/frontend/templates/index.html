@@ -5,22 +5,45 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LibreDesign Suite</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
 <body>
     <header>
-        <h1>LibreDesign Suite</h1>
-        <nav>
-            <ul>
-                <li><a href="#" data-category="image_editing">Image Editing</a></li>
-                <li><a href="#" data-category="video_editing">Video Editing</a></li>
-                <li><a href="#" data-category="audio_editing">Audio Editing</a></li>
-            </ul>
-        </nav>
+        <div class="header-content">
+            <div class="logo-area">
+                <img src="{{ url_for('static', filename='img/logo.png') }}" alt="LibreDesign Suite Logo" class="logo">
+                <div class="title-area">
+                    <h1>LibreDesign Suite</h1>
+                    <p class="subtitle">Free and Open Source Creative Tools</p>
+                </div>
+            </div>
+            <nav>
+                <ul>
+                    <li><a href="#" data-category="image_editing" class="active">
+                        <i class="fas fa-image"></i> Image Editing
+                    </a></li>
+                    <li><a href="#" data-category="video_editing">
+                        <i class="fas fa-video"></i> Video Editing
+                    </a></li>
+                    <li><a href="#" data-category="audio_editing">
+                        <i class="fas fa-music"></i> Audio Editing
+                    </a></li>
+                </ul>
+            </nav>
+        </div>
     </header>
+
+    <div class="search-bar">
+        <input type="text" id="program-search" placeholder="Search programs...">
+    </div>
 
     <main id="programs-container">
         <!-- Programs will be loaded here dynamically -->
     </main>
+
+    <footer>
+        <p>LibreDesign Suite</p>
+    </footer>
 
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 </body>
